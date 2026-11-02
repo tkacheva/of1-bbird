@@ -1,8 +1,10 @@
 Demo Project - Cloud Adoption
 
 ## Environments
-- Preview: https://main--demo--scdemos.aem.page/
-- Live: https://main--demo--scdemos.aem.live/
+- Preview: https://main--of1-bbird--tkacheva.aem.page/
+- Live: https://main--of1-bbird--tkacheva.aem.live/
+- CDN (production): https://demo.of1-bbird.live/
+- Authoring (DA): https://da.live/#/tkacheva/of1-bbird
 
 ## Documentation
 
