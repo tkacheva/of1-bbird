@@ -14,7 +14,6 @@ import {
   readBlockConfig,
   sampleRUM,
   loadCSS,
-  loadScript,
   getMetadata,
   toCamelCase,
   toClassName,
@@ -22,26 +21,14 @@ import {
 import {
   initMartech, martechEager, martechLazy, martechDelayed,
 } from '../plugins/martech/src/index.js';
-import { getAllMetadata, getLocale } from './shared.js';
+import { getLocale } from './shared.js';
 import { initPageSchemas } from './schema.js';
 import dynamicBlocks from '../blocks/dynamic/index.js';
-
-const AUDIENCES = {
-  mobile: () => window.innerWidth < 600,
-  desktop: () => window.innerWidth >= 600,
-};
-
-function getExperimentationContext() {
-  return {
-    getAllMetadata, getMetadata, loadCSS, loadScript, sampleRUM, toCamelCase, toClassName,
-  };
-}
-
-function isExperimentationEnabled() {
-  return getMetadata('experiment')
-    || Object.keys(getAllMetadata('campaign')).length
-    || Object.keys(getAllMetadata('audience')).length;
-}
+import {
+  runExperimentation,
+  runExperimentationLazy,
+  isAuthorPreview,
+} from './experiment-loader.js';
 
 const THEME_STORAGE_KEY = 'demo-theme';
 
@@ -351,10 +338,8 @@ async function loadEager(doc) {
   const main = doc.querySelector('main');
   if (main) {
     if (window.isErrorPage) loadErrorPage(main);
-    if (isExperimentationEnabled()) {
-      const { loadEager: runEager } = await import('../plugins/experimentation/src/index.js');
-      await runEager(document, { audiences: AUDIENCES }, getExperimentationContext());
-    }
+    // Must run before decorateMain consumes section metadata.
+    await runExperimentation(doc);
     decorateMain(main);
     // Re-decorate EDS block markup that a Target offer injects after decoration has
     // already run (e.g. a replaceHtml offer that brings in authored block HTML). Started
@@ -460,10 +445,7 @@ async function loadLazy(doc) {
   loadCSS(`${window.hlx.codeBasePath}/styles/lazy-styles.css`);
   loadFonts();
 
-  if (isExperimentationEnabled()) {
-    const { loadLazy: runLazy } = await import('../plugins/experimentation/src/index.js');
-    await runLazy(document, { audiences: AUDIENCES }, getExperimentationContext());
-  }
+  await runExperimentationLazy(doc);
 
   const loadQuickEdit = async (...args) => {
     const { default: initQuickEdit } = await import('../tools/quick-edit/quick-edit.js');
@@ -519,7 +501,17 @@ export async function loadPage() {
 }
 
 if (!window.hlx?.suppressLoadPage) {
-  loadPage();
+  const pageLoaded = loadPage();
+
+  // Bridge between the page preview and the DA Contextual Experimentation rail.
+  if (isAuthorPreview(window.location.href, window.parent !== window)) {
+    pageLoaded.then(async () => {
+      const namespace = window.aem || window.hlx;
+      if (!namespace?.experimentation) return;
+      const { default: connectAuthorPreview } = await import('./experimentation-preview.js');
+      connectAuthorPreview({ prodHost: 'main--of1-bbird--tkacheva.aem.live' });
+    });
+  }
 
   (async function loadDa() {
     const { searchParams } = new URL(window.location.href);
